@@ -13,6 +13,20 @@ public class Message implements Serializable {
 
     private User author;
 
+    private User receiver;
+
     private String text;
+
+    public User getAuthor() {
+        return author;
+    }
+
+    public User getReceiver() {
+        return receiver;
+    }
+
+    public String getText() {
+        return text;
+    }
 
 }

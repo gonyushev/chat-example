@@ -1,13 +1,14 @@
 package ru.example.chat.ui;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Display;
@@ -24,7 +25,7 @@ import ru.example.chat.ui.view.LoginDialog;
  */
 public class ClientLauncher {
 
-    private static User user;
+    public static User user;
 
     /**
      * Запускает клиент.
@@ -34,6 +35,12 @@ public class ClientLauncher {
      */
     public static void main(String[] args) throws Exception {
         System.out.println("start client");
+
+        String host = (null != args && args.length > 0) ? args[0] : "127.0.0.1";
+        int port =
+                (null != args && args.length > 1) ? Integer.parseInt(args[1])
+                        : 7777;
+
         Client client = new Client();
 
         Display display = new Display();
@@ -42,14 +49,14 @@ public class ClientLauncher {
         shell.setLayout(new GridLayout());
         shell.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        ChatView view = new ChatView();
+        ChatView view = new ChatView(client);
         view.createContent(shell);
 
         shell.open();
 
         LoginDialog loginDialog = new LoginDialog(shell);
         if (0 == loginDialog.open()) {
-            client.startConnection("127.0.0.1", 6666);
+            client.startConnection(host, port);
             user = loginDialog.getUser();
             shell.setText("Чат - " + user);
             client.sendMessage(user);
@@ -57,34 +64,19 @@ public class ClientLauncher {
             shell.close();
         }
 
-        view.getSend().addSelectionListener(new SelectionListener() {
-
-            @Override
-            public void widgetSelected(SelectionEvent arg0) {
-                Message message =
-                        Message.builder().author(user)
-                                .text(view.getInput().getText()).build();
-                view.getInput().setText("");
-                view.getInput().getParent().layout();
-                try {
-                    client.sendMessage(message);
-                } catch (ClassNotFoundException | IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            @Override
-            public void widgetDefaultSelected(SelectionEvent arg0) {}
-        });
-
-        Executors.newSingleThreadExecutor().submit(() -> {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(() -> {
             while (true) {
+                if (client.isClosed()) {
+                    break;
+                }
                 Object message;
                 try {
                     message = client.readMessage();
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    continue;
+                    Logger.getLogger(ClientLauncher.class.getName()).log(
+                            Level.SEVERE, e.getMessage(), e);
+                    break;
                 }
                 Display.getDefault().asyncExec(() -> {
                     if (!shell.isDisposed()) {
@@ -99,6 +91,7 @@ public class ClientLauncher {
                 display.sleep();
             }
         }
+        executor.shutdown();
         display.dispose();
         client.stopConnection();
     }
@@ -107,17 +100,16 @@ public class ClientLauncher {
         if (response instanceof Set) {
             @SuppressWarnings("unchecked")
             Set<User> users = (Set<User>) response;
-            view.getUsers()
-                    .setText(
-                            users.stream()
-                                    .map(User::toString)
-                                    .collect(
-                                            Collectors.joining(System
-                                                    .lineSeparator())));
-            view.getUsers().getParent().layout();
+            List<Object> input = new ArrayList<>();
+            input.add("Общий чат");
+            input.addAll(users);
+            view.getUsersViewer().setInput(input.toArray());
+            view.getUsersViewer().refresh();
         } else if (response instanceof Message) {
             Message msg = (Message) response;
-            Text history = view.getHistory();
+            User author = (null == msg.getReceiver()) ? null : msg.getAuthor();
+            view.switchToReceiver(author);
+            Text history = view.getMessageForm(author).getHistory();
             StringBuilder historyText = new StringBuilder(history.getText());
             historyText.append(System.lineSeparator()).append(msg.getAuthor())
                     .append(": ").append(msg.getText());

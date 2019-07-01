@@ -1,67 +1,111 @@
 package ru.example.chat.ui.view;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.eclipse.jface.layout.GridLayoutFactory;
+import org.eclipse.jface.viewers.ArrayContentProvider;
+import org.eclipse.jface.viewers.ColumnLabelProvider;
+import org.eclipse.jface.viewers.IOpenListener;
+import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.jface.viewers.OpenEvent;
+import org.eclipse.jface.viewers.TableViewer;
+import org.eclipse.jface.viewers.TableViewerColumn;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
+import org.eclipse.swt.custom.StackLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
-import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
+
+import ru.example.chat.server.model.User;
+import ru.example.chat.ui.Client;
 
 public class ChatView {
 
-    private Text users;
+    private TableViewer usersViewer;
 
-    private Text history;
+    private Map<User, MessageForm> messageForms = new HashMap<>();
 
-    private Text input;
+    private StackLayout stack;
 
-    private Button send;
+    private Composite messageForm;
+
+    private Client client;
+
+    public ChatView(Client client) {
+        this.client = client;
+    }
 
     public void createContent(Shell shell) {
         SashForm main = new SashForm(shell, SWT.BORDER | SWT.HORIZONTAL);
         main.setLayout(new GridLayout());
         main.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        users = new Text(main, SWT.BORDER | SWT.MULTI | SWT.READ_ONLY);
-        users.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        users.setToolTipText("Пользователи");
+        createUserList(main);
 
-        SashForm textSash = new SashForm(main, SWT.BORDER | SWT.VERTICAL);
-        textSash.setLayout(new GridLayout());
-        textSash.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+        messageForm = new Composite(main, SWT.NONE);
+        stack = new StackLayout();
+        messageForm.setLayout(stack);
+        messageForm.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        history =
-                new Text(textSash, SWT.BORDER | SWT.MULTI | SWT.WRAP
-                        | SWT.READ_ONLY);
-        history.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        history.setToolTipText("История");
+        createMessageForm(messageForm, null);
 
-        input = new Text(textSash, SWT.BORDER | SWT.MULTI | SWT.WRAP);
-        input.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        input.setToolTipText("Сообщение");
-
-        send = new Button(textSash, SWT.PUSH);
-        send.setText("Отправить");
-
-        main.setWeights(new int[] {20, 80});
-        textSash.setWeights(new int[] {70, 20, 10});
+        main.setWeights(new int[] {30, 70});
     }
 
-    public Text getUsers() {
-        return users;
+    protected void createMessageForm(Composite parent, User user) {
+        MessageForm form = new MessageForm(parent, user, client);
+        messageForms.put(user, form);
+        stack.topControl = form.getTextSash();
+        messageForm.layout();
     }
 
-    public Text getHistory() {
-        return history;
+    private void createUserList(SashForm main) {
+        usersViewer = new TableViewer(main);
+        usersViewer.setContentProvider(ArrayContentProvider.getInstance());
+        usersViewer.getTable().setHeaderVisible(true);
+        usersViewer.getTable().setLinesVisible(true);
+        TableViewerColumn viewerColumn =
+                new TableViewerColumn(usersViewer, SWT.NONE);
+        viewerColumn.getColumn().setWidth(300);
+        viewerColumn.getColumn().setText("Пользователи");
+        viewerColumn.setLabelProvider(new ColumnLabelProvider());
+        usersViewer.setInput(new String[0]);
+        GridLayoutFactory.fillDefaults().generateLayout(usersViewer.getTable());
+
+        usersViewer.addOpenListener(new IOpenListener() {
+
+            @Override
+            public void open(OpenEvent event) {
+                Object selected =
+                        ((IStructuredSelection) event.getSelection())
+                                .getFirstElement();
+                User receiver =
+                        (selected instanceof User) ? (User) selected : null;
+                switchToReceiver(receiver);
+            }
+
+        });
     }
 
-    public Text getInput() {
-        return input;
+    public TableViewer getUsersViewer() {
+        return usersViewer;
     }
 
-    public Button getSend() {
-        return send;
+    public MessageForm getMessageForm(User user) {
+        return messageForms.get(user);
+    }
+
+    public void switchToReceiver(User receiver) {
+        MessageForm form = messageForms.get(receiver);
+        if (null == form) {
+            createMessageForm(messageForm, receiver);
+        } else {
+            stack.topControl = form.getTextSash();
+            messageForm.layout();
+        }
     }
 
 }

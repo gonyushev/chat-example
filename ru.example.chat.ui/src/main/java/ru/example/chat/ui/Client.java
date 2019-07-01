@@ -52,4 +52,8 @@ public class Client {
         return in;
     }
 
+    public boolean isClosed() {
+        return clientSocket.isClosed();
+    }
+
 }

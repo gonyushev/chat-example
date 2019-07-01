@@ -15,7 +15,10 @@ public class ServerLauncher {
      */
     public static void main(String[] args) throws Exception {
         System.out.println("start server");
-        Server server = new Server(6666);
+        int port =
+                (null != args && args.length != 0) ? Integer.parseInt(args[0])
+                        : 7777;
+        Server server = new Server(port);
         server.start();
     }
 
